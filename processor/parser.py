@@ -14,7 +14,6 @@ from .topic_base import Subtopic, Topic
 from utils import Cluster, Sentiment, Summary
 
 # constants for column headers
-FB_COL = "Comments"
 SMT_LABEL = "smt_label"
 SMT_SCORE = "smt_score"
 T_ID = "topic_name"
@@ -30,13 +29,21 @@ class Parser:
     clustering, and text summarization. Instantiates topic and subtopic
     objects for data organization and encapsulation.
     """
-    def __init__(self, df: pd.DataFrame):
+
+    def __init__(self, df: pd.DataFrame,
+                 col_name: str, seeds: list[str] | None = None):
         self.df = df
+        self.col = col_name
+        self.seeds = seeds
+
         self.smt = Sentiment()
         self.summary = Summary()
-        self.cluster = Cluster(self.df[FB_COL].tolist())
+        self.cluster = None
+
         self.topics: list[Topic] = []
         self.subtopics: dict[int, Subtopic] = {}
+
+        self.out = None
 
     def _get_sentimental(self, feedback: list[str]) -> dict[str, int]:
         """
@@ -156,22 +163,23 @@ class Parser:
             records.append(st_data)
         return pd.DataFrame(records)
 
-    def run(self) -> None:
-        """
-        Method runs parsing / sentiment analysis / topic modelling / LLM
-        summarization operations on data.
-        """
+    def pre_process_ml(self) -> None:
+        self.cluster = Cluster(self.df[self.col].tolist())
+
+    def build_data_structures(self) -> None:
         # build subtopics and topics from data using topic modelling
         self._build_subtopics()
         self._build_topics()
-        # build topic names and subtopic info from topic modelling output
-        # using LLM
+
+    def process_llm(self) -> None:
         self._build_topic_names()
         self._build_subtopic_info()
+
+    def save(self, fpath_out: str):
         # instantiate a summary df and print to CSV
-        df = self.get_summary()
-        df.to_csv(
-            "data/output.csv",
+        self.out = self.get_summary()
+        self.out.to_csv(
+            path_or_buf=fpath_out,
             index=False,
             encoding="utf-8",
             sep=",",
